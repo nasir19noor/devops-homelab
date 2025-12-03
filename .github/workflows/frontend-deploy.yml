@@ -1,0 +1,112 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-deploy.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+
+env:
+  DOCKER_IMAGE: nasir19noor/frontend
+  KUBE_NAMESPACE: microservices
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.DOCKER_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache
+        cache-to: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ env.KUBE_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy to Kubernetes
+      run: |
+        # Update image in deployment
+        kubectl set image deployment/frontend frontend=${{ env.DOCKER_IMAGE }}:${{ github.sha }} -n ${{ env.KUBE_NAMESPACE }} || \
+        kubectl apply -f k8s/deployment.yaml
+        
+        # Wait for rollout to complete
+        kubectl rollout status deployment/frontend -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
+
+    - name: Verify deployment
+      run: |
+        echo "=== Deployment Status ==="
+        kubectl get deployment frontend -n ${{ env.KUBE_NAMESPACE }}
+        
+        echo "=== Pods Status ==="
+        kubectl get pods -n ${{ env.KUBE_NAMESPACE }} -l app=frontend
+        
+        echo "=== Service Status ==="
+        kubectl get svc frontend-service -n ${{ env.KUBE_NAMESPACE }}
+
+    - name: Run smoke tests
+      run: |
+        # Get NodePort
+        NODE_PORT=$(kubectl get svc frontend-service -n ${{ env.KUBE_NAMESPACE }} -o jsonpath='{.spec.ports[0].nodePort}')
+        
+        # Wait for service to be ready
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:$NODE_PORT/health || exit 1
+        
+        echo "✅ Frontend is healthy and accessible on port $NODE_PORT"
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "Deployment failed, rolling back..."
+        kubectl rollout undo deployment/frontend -n ${{ env.KUBE_NAMESPACE }}
+        kubectl rollout status deployment/frontend -n ${{ env.KUBE_NAMESPACE }}
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Frontend deployment successful!"
+          echo "Access at: http://your-node-ip:30080"
+        else
+          echo "❌ Frontend deployment failed!"
+        fi
