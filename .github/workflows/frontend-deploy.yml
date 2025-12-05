@@ -81,8 +81,9 @@ jobs:
 
     - name: Deploy to Kubernetes
       run: |
+        IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}"
         # Update image in deployment
-        kubectl set image deployment/frontend frontend=${{ env.DOCKER_IMAGE }}:${{ github.sha }} -n ${{ env.KUBE_NAMESPACE }} || \
+        kubectl set image deployment/frontend frontend=${IMAGE_TAG} -n ${{ env.KUBE_NAMESPACE }} || \
         kubectl apply -f frontend/k8s/deployment.yaml
         
         # Wait for rollout to complete
