@@ -15,7 +15,7 @@ on:
     inputs:
       action:
         description: 'Action to perform'
-        required: tru
+        required: true
         default: 'deploy'
         options:
           - deploy
