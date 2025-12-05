@@ -10,6 +10,19 @@ on:
     branches: [ main ]
     paths:
       - 'frontend/**'
+  
+  workflow_dispatch:
+    inputs:action:
+      description: 'Action to perform'
+      required: tru
+      default: 'deploy'
+      options:
+        - deploy
+        - rollback
+    revision:
+      description: 'Revision number to rollback to (0 = previous, 1 = two version back, etc)'
+      required: false
+      default: '0'        
 
 env:
   DOCKER_IMAGE: nasir19noor/frontend
