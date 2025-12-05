@@ -83,7 +83,7 @@ jobs:
       run: |
         # Update image in deployment
         kubectl set image deployment/frontend frontend=${{ env.DOCKER_IMAGE }}:${{ github.sha }} -n ${{ env.KUBE_NAMESPACE }} || \
-        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f frontend/k8s/deployment.yaml
         
         # Wait for rollout to complete
         kubectl rollout status deployment/frontend -n ${{ env.KUBE_NAMESPACE }} --timeout=5m
