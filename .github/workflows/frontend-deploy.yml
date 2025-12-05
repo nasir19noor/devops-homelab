@@ -17,6 +17,7 @@ on:
         description: 'Action to perform'
         required: true
         default: 'deploy'
+        type: choice
         options:
           - deploy
           - rollback
