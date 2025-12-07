@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: your-dockerhub-username/frontend:latest
+        image: nasir19noor/frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -59,7 +59,7 @@ metadata:
   labels:
     app: frontend
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: frontend
   ports:
